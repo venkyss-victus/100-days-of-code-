@@ -4,6 +4,11 @@
 ![Status](https://img.shields.io/badge/Status-In%20Progress-green)
 ![University](https://img.shields.io/badge/University-UPES-orange)
 
+## GitHub Stats Card
+DAILY PROGRESS
+![GitHub Stats](https://github-readme-stats.vercel.app/api?username=venkyss-victus&show_icons=true&theme=tokyonight)
+
+
 ## 📖 About
 
 This repository contains my solutions for the **100 Days of Code Challenge**.
