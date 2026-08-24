@@ -60,9 +60,11 @@ Each folder contains the programs completed on that day.
 | Day 10 | ✅ |
 | Day 11 | ✅ |
 | Day 12 | ✅ |
-| Day 13 | ⏳ |
-| ... | ... |
-
+| Day 13 |✅ |
+| Day14 | ✅ |
+|Day 14 | ✅ |
+|Day15  | ✅ |
+|Day 16 |  ⏳ |
 ---
 
 ## 🛠 Topics Covered
