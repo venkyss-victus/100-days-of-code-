@@ -69,7 +69,8 @@ Each folder contains the programs completed on that day.
 | Day14 | ✅ |
 |Day 14 | ✅ |
 |Day15  | ✅ |
-|Day 16 |  ⏳ |
+|Day 16 | ✅ |
+|Day 17|  ⏳|
 ---
 
 ## 🛠 Topics Covered
