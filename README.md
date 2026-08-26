@@ -70,7 +70,8 @@ Each folder contains the programs completed on that day.
 |Day 14 | ✅ |
 |Day15  | ✅ |
 |Day 16 | ✅ |
-|Day 17|  ⏳|
+|Day 17|  ✅ |
+|Day 18 |  ⏳  |
 ---
 
 ## 🛠 Topics Covered
