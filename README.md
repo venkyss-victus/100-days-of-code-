@@ -75,7 +75,13 @@ Each folder contains the programs completed on that day.
 |Day 19|  ✅ |
 |Day 20|    ✅ |
 |Day 21|  ✅ |
-|Day 22| ⏳ |
+|Day 22| ✅ |
+| Day 23|✅|
+| Day 24|✅|
+|Day 25|✅|
+|Day 26|✅|
+|Day 27|⏳|
+
 ---
 
 ## 🛠 Topics Covered
