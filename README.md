@@ -80,8 +80,9 @@ Each folder contains the programs completed on that day.
 | Day 24|✅|
 |Day 25|✅|
 |Day 26|✅|
-|Day 27|⏳|
-
+|Day 27|✅|
+|Day 28|✅|
+|Day 29|⏳|
 ---
 
 ## 🛠 Topics Covered
