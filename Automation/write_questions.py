@@ -1,63 +1,73 @@
 import os
-import glob
-import subprocess
+import re
 
-def get_clipboard_text():
-    return subprocess.check_output(['pbpaste'], text=True)
+# Paste your raw question data here
+DATA = """
+Day 41
+🔤
+Q81 (Strings)
+📋
+Print each character of a string on a new line.
+Show Sample Test Cases
 
-def add_comment_to_c_file(day_folder, q_num, question_text):
-    search_pattern = os.path.join(day_folder, f"*{q_num.replace('Q', '')}*.c")
-    matching_files = glob.glob(search_pattern)
-    
-    if matching_files:
-        target_file = matching_files[0]
-        comment = f"/*\n * {q_num}: {question_text}\n */\n\n"
-        
-        with open(target_file, 'r') as f:
-            existing_content = f.read()
-            
-        if not existing_content.startswith("/*"):
-            with open(target_file, 'w') as f:
-                f.write(comment + existing_content)
-            print(f"SUCCESS: Added comment to {target_file}")
-    else:
-        print(f"WARNING: No .c file found for {q_num} in {day_folder}")
+Day 42
+🔤
+Q83 (Strings)
+📋
+Count vowels and consonants in a string.
+Show Sample Test Cases
+Input 1:
+hello
+Output 1:
+Vowels=2, Consonants=3
+
+🔤
+Q84 (Strings)
+📋
+Convert a lowercase string to uppercase without using built-in functions.
+Show Sample Test Cases
+"""
 
 def process_questions():
-    data = get_clipboard_text()
-    current_day = None
+    # Split the data by "Day " to handle each day's folder
+    days = DATA.split("Day ")
     
-    lines = [line.strip() for line in data.split('\n') if line.strip()]
-    
-    i = 0
-    while i < len(lines):
-        # Remove markdown hashes for easier matching
-        clean_line = lines[i].replace('#', '').strip()
+    for day_block in days:
+        if not day_block.strip():
+            continue
+            
+        lines = day_block.split("\n")
+        day_number = lines[0].strip()
+        folder_name = f"Day{day_number}"
         
-        if clean_line.startswith("Day "):
-            current_day = clean_line.replace(" ", "")
-            print(f"Found {current_day}...")
-            i += 1
-            continue
+        # Regex to find Q[Number], the Topic, and the Question Text
+        pattern = r'Q(\d+)\s\((.*?)\)\n📋\n(.*?)(?=\n\S|\nDay|\Z)'
+        questions = re.findall(pattern, day_block, re.DOTALL)
+        
+        for q_num, q_type, q_text in questions:
+            # Clean up the question text
+            clean_text = q_text.split("Show Sample Test Cases")[0].strip()
             
-        if clean_line.startswith("Q") and "(" in clean_line:
-            current_q_num = clean_line.split()[0]
-            i += 1
+            # Look in the parent directory (../) since your script is in /Automation
+            target_dir = f"../{folder_name}"
             
-            # Skip icons or formatting lines
-            while i < len(lines) and lines[i] in ["📋", "```", "🔢", "🔲"]:
-                i += 1
-                
-            if i < len(lines):
-                question_text = lines[i]
-                # Skip if it accidentally grabbed a label instead of the question
-                if "Sample Test Cases" not in question_text and not question_text.startswith("Input"):
-                    if current_day and os.path.exists(current_day):
-                        add_comment_to_c_file(current_day, current_q_num, question_text)
-                i += 1
-            continue
-            
-        i += 1
+            if os.path.exists(target_dir):
+                for filename in os.listdir(target_dir):
+                    # Match the question number to the file (e.g., -81.c)
+                    if f"-{q_num}." in filename:
+                        file_path = os.path.join(target_dir, filename)
+                        
+                        with open(file_path, 'r') as f:
+                            content = f.read()
+                            
+                        # Add the comment if it doesn't already exist
+                        if not content.startswith("/*"):
+                            comment = f"/*\n  Q{q_num} ({q_type}): {clean_text}\n*/\n\n"
+                            with open(file_path, 'w') as f:
+                                f.write(comment + content)
+                            print(f"Successfully added comment to {filename}")
+            else:
+                print(f"Could not find folder: {folder_name}")
 
 if __name__ == "__main__":
     process_questions()
