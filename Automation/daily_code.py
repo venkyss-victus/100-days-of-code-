@@ -1,6 +1,5 @@
 import os
 import re
-import json
 import subprocess
 from pathlib import Path
 
@@ -8,126 +7,174 @@ import requests
 from google import genai
 
 
+# ============================================================
+# SETTINGS
+# ============================================================
+
 ROOT = Path(__file__).resolve().parent.parent
 
-QUESTION_URLS = [
-    "https://raw.githubusercontent.com/Soumik-Maity/basic-coding-with-c/main/questions.json",
-]
+QUESTION_URL = (
+    "https://raw.githubusercontent.com/"
+    "Soumik-Maity/basic-coding-with-c/main/questions.json"
+)
 
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+if not GEMINI_API_KEY:
+    raise RuntimeError("GEMINI_API_KEY is missing.")
+
+client = genai.Client(api_key=GEMINI_API_KEY)
+
+
+# ============================================================
+# FIND CURRENT DAY
+# ============================================================
 
 def get_latest_day():
     days = []
 
     for item in ROOT.iterdir():
-        if item.is_dir():
-            match = re.fullmatch(r"Day(\d+)", item.name)
 
-            if match:
-                days.append(int(match.group(1)))
+        if not item.is_dir():
+            continue
+
+        match = re.fullmatch(r"Day(\d+)", item.name)
+
+        if match:
+            days.append(int(match.group(1)))
 
     return max(days) if days else 0
 
 
-def get_existing_question_numbers():
-    numbers = set()
-
-    for file in ROOT.glob("Day*/*.c"):
-        match = re.search(r"-(\d+)\.c$", file.name)
-
-        if match:
-            numbers.add(int(match.group(1)))
-
-    return numbers
-
+# ============================================================
+# DOWNLOAD QUESTIONS
+# ============================================================
 
 def download_questions():
-    questions = []
 
-    for url in QUESTION_URLS:
-        print(f"Downloading questions from {url}")
+    print("Downloading question bank...")
 
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
+    response = requests.get(
+        QUESTION_URL,
+        timeout=30
+    )
 
-        data = response.json()
+    response.raise_for_status()
 
-        if isinstance(data, list):
-            questions.extend(data)
+    data = response.json()
 
-        elif isinstance(data, dict):
-            for value in data.values():
-                if isinstance(value, list):
-                    questions.extend(value)
+    questions = {}
+
+    question_bank = data.get("questionBank", [])
+
+    for section in question_bank:
+
+        section_questions = section.get(
+            "questions",
+            []
+        )
+
+        for question in section_questions:
+
+            question_id = question.get("id")
+
+            if question_id is None:
+                continue
+
+            try:
+                question_id = int(question_id)
+
+            except (ValueError, TypeError):
+                continue
+
+            questions[question_id] = question
+
+    print(
+        f"Found {len(questions)} questions "
+        "in the question bank."
+    )
 
     return questions
 
 
-def get_question_number(question):
-    possible_keys = [
-        "id",
-        "question_id",
-        "number",
-        "questionNumber",
-    ]
-
-    for key in possible_keys:
-        if key in question:
-            try:
-                return int(question[key])
-            except (ValueError, TypeError):
-                pass
-
-    return None
-
+# ============================================================
+# GET QUESTION TEXT
+# ============================================================
 
 def get_question_text(question):
-    possible_keys = [
-        "question",
-        "text",
-        "problem",
-        "description",
-    ]
 
-    for key in possible_keys:
+    text = question.get("text")
+
+    if text:
+        return text.strip()
+
+    # Fallback in case website changes the name later
+
+    for key in [
+        "question",
+        "problem",
+        "description"
+    ]:
+
         value = question.get(key)
 
-        if isinstance(value, str) and value.strip():
+        if isinstance(value, str):
             return value.strip()
 
-    return json.dumps(question, indent=2)
+    raise RuntimeError(
+        "Could not find question text."
+    )
 
 
-def generate_c_solution(number, question):
+# ============================================================
+# GENERATE C CODE USING GEMINI
+# ============================================================
+
+def generate_solution(
+    question_number,
+    question_text
+):
+
+    print(
+        f"Generating solution for "
+        f"Question {question_number}..."
+    )
+
     prompt = f"""
-You are solving a beginner C programming exercise.
+You are writing a beginner-level C programming solution
+for a first-year BTech CSE student's 100 Days of Code
+GitHub repository.
 
-Question number: {number}
+QUESTION NUMBER:
+{question_number}
 
-Question:
-{question}
+QUESTION:
+{question_text}
 
-Write a simple solution suitable for a first-year BTech CSE student.
+Write the complete C program.
 
-IMPORTANT RULES:
+STRICT REQUIREMENTS:
 
 1. Return ONLY C source code.
-2. Do not use Markdown ``` fences.
-3. Put the full question at the top inside a C block comment.
-4. Use standard C.
-5. Keep the solution simple and beginner friendly.
-6. Avoid advanced techniques unless absolutely necessary.
-7. Read required input from stdin.
-8. Print only the required output.
+2. Do NOT use Markdown code fences.
+3. Put the full question at the top of the file
+   inside a C block comment.
+4. Use simple beginner-friendly C.
+5. Prefer loops, conditions, arrays, strings and
+   simple functions.
+6. Avoid unnecessarily advanced techniques.
+7. Read input using standard input.
+8. Print only the output required by the question.
 9. Use meaningful variable names.
-10. main() must return 0.
+10. Include return 0; in main().
+11. The program must compile using GCC with C11.
+12. Do not include explanations outside the C code.
 
-Example structure:
+Example format:
 
 /*
-Question:
-The question goes here.
+Question {question_number}:
+{question_text}
 */
 
 #include <stdio.h>
@@ -142,142 +189,304 @@ int main()
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",
-        contents=prompt,
+        contents=prompt
     )
+
+    if not response.text:
+        raise RuntimeError(
+            "Gemini returned an empty response."
+        )
 
     code = response.text.strip()
 
-    # Remove Markdown fences if the model accidentally sends them.
-    code = re.sub(r"^```c\s*", "", code)
-    code = re.sub(r"^```\s*", "", code)
-    code = re.sub(r"\s*```$", "", code)
+    # Remove Markdown fences if Gemini adds them.
+
+    code = re.sub(
+        r"^```(?:c)?\s*",
+        "",
+        code
+    )
+
+    code = re.sub(
+        r"\s*```$",
+        "",
+        code
+    )
 
     return code.strip() + "\n"
 
 
-def compile_program(source):
-    executable = source.with_suffix("")
+# ============================================================
+# COMPILE GENERATED PROGRAM
+# ============================================================
+
+def compile_program(source_file):
+
+    executable = source_file.with_suffix("")
+
+    print(
+        f"Compiling {source_file.name}..."
+    )
 
     result = subprocess.run(
         [
             "gcc",
-            str(source),
+            str(source_file),
             "-std=c11",
             "-Wall",
             "-Wextra",
             "-o",
-            str(executable),
+            str(executable)
         ],
         capture_output=True,
-        text=True,
+        text=True
     )
 
     if result.returncode != 0:
+
         print()
-        print(f"ERROR: {source.name} did not compile.")
+        print("COMPILATION FAILED")
         print(result.stderr)
+
+        executable.unlink(
+            missing_ok=True
+        )
 
         return False
 
-    executable.unlink(missing_ok=True)
+    executable.unlink(
+        missing_ok=True
+    )
 
-    print(f"{source.name} compiled successfully.")
+    print(
+        f"{source_file.name} "
+        "compiled successfully."
+    )
 
     return True
 
 
+# ============================================================
+# DETERMINE QUESTIONS FOR DAY
+# ============================================================
+
+def get_question_numbers_for_day(day):
+
+    # Day 1 = Questions 1 and 2
+    # Day 2 = Questions 3 and 4
+    # ...
+    # Day 45 = Questions 89 and 90
+    # Day 46 = Questions 91 and 92
+    # ...
+    # Day 50 = Questions 99 and 100
+
+    if day <= 50:
+
+        first_question = (
+            (day - 1) * 2
+        ) + 1
+
+        return [
+            first_question,
+            first_question + 1
+        ]
+
+    # After Day 50:
+    #
+    # Day 51 = Question 101
+    # Day 52 = Question 102
+    # etc.
+
+    question_number = (
+        100 + (day - 50)
+    )
+
+    return [question_number]
+
+
+# ============================================================
+# MAIN AUTOMATION
+# ============================================================
+
 def main():
+
+    print()
+    print("=" * 50)
+    print("100 DAYS OF CODE AUTOMATION")
+    print("=" * 50)
+
     latest_day = get_latest_day()
+
     next_day = latest_day + 1
 
-    print(f"Latest day: Day{latest_day:02d}")
-    print(f"Next day: Day{next_day:02d}")
+    print(
+        f"Latest day: Day{latest_day:02d}"
+    )
 
-    existing_questions = get_existing_question_numbers()
+    print(
+        f"Next day:   Day{next_day:02d}"
+    )
+
+    question_numbers = (
+        get_question_numbers_for_day(
+            next_day
+        )
+    )
+
+    print(
+        "Questions for today:",
+        question_numbers
+    )
+
+    # Download question bank
 
     questions = download_questions()
 
-    available = {}
+    # Make sure questions exist BEFORE
+    # creating the folder.
 
-    for question in questions:
-        number = get_question_number(question)
+    for number in question_numbers:
 
-        if number is None:
-            continue
+        if number not in questions:
 
-        if number in existing_questions:
-            continue
+            raise RuntimeError(
+                f"Question {number} was not "
+                "found in the question bank."
+            )
 
-        available[number] = question
+    # Create DayXX folder
 
-    available = sorted(available.items())
-
-    if not available:
-        print("No new questions available.")
-        return
-
-    # First 50 days = 2 questions/day.
-    # After Day 50 = 1 question/day.
-    questions_today = 2 if next_day <= 50 else 1
-
-    selected = available[:questions_today]
-
-    if len(selected) < questions_today:
-        raise RuntimeError(
-            f"Only {len(selected)} question(s) available, "
-            f"but {questions_today} are required."
-        )
-
-    folder = ROOT / f"Day{next_day:02d}"
+    folder = (
+        ROOT /
+        f"Day{next_day:02d}"
+    )
 
     if folder.exists():
+
         raise RuntimeError(
             f"{folder.name} already exists. "
-            "Stopping to prevent overwriting your work."
+            "Stopping to prevent overwriting."
         )
 
     folder.mkdir()
 
+    created_files = []
+
     try:
-        for number, question_data in selected:
 
-            question = get_question_text(question_data)
+        for number in question_numbers:
 
-            print()
-            print(f"Generating Question {number}...")
-
-            code = generate_c_solution(
-                number,
-                question,
+            question_data = (
+                questions[number]
             )
 
-            filename = folder / f"day{next_day}-{number}.c"
+            question_text = (
+                get_question_text(
+                    question_data
+                )
+            )
+
+            print()
+            print("-" * 50)
+
+            print(
+                f"Question {number}:"
+            )
+
+            print(question_text)
+
+            print("-" * 50)
+
+            # Generate C program
+
+            code = generate_solution(
+                number,
+                question_text
+            )
+
+            # Your naming format:
+            #
+            # Day46/
+            #   day46-91.c
+            #   day46-92.c
+
+            filename = (
+                folder /
+                f"day{next_day}-{number}.c"
+            )
 
             filename.write_text(
                 code,
-                encoding="utf-8",
+                encoding="utf-8"
             )
 
-            print(f"Created: {filename}")
+            created_files.append(
+                filename
+            )
 
-            if not compile_program(filename):
+            print(
+                f"Created: {filename}"
+            )
+
+            # Compile it
+
+            if not compile_program(
+                filename
+            ):
+
                 raise RuntimeError(
-                    f"Compilation failed for Question {number}"
+                    f"Question {number} "
+                    "failed compilation."
                 )
 
     except Exception:
-        # Delete the new folder if something fails.
+
+        print()
+        print(
+            "Something failed."
+        )
+
+        print(
+            "Removing incomplete "
+            f"{folder.name}..."
+        )
+
+        # Remove generated files
+
         for file in folder.glob("*"):
-            file.unlink(missing_ok=True)
+
+            file.unlink(
+                missing_ok=True
+            )
 
         folder.rmdir()
 
         raise
 
     print()
-    print("=" * 40)
-    print(f"Day{next_day:02d} completed!")
-    print("=" * 40)
+    print("=" * 50)
+
+    print(
+        f"Day{next_day:02d} "
+        "SUCCESSFULLY CREATED!"
+    )
+
+    print(
+        "Generated files:"
+    )
+
+    for file in created_files:
+
+        print(
+            f"  - {file.name}"
+        )
+
+    print(
+        "All programs compiled successfully."
+    )
+
+    print("=" * 50)
+    print()
 
 
 if __name__ == "__main__":
