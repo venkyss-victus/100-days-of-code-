@@ -34,7 +34,7 @@ jobs:
 
       # Generate the next day's C programs
       - name: Generate today's C programs
-        timeout-minutes: 3
+        timeout-minutes: 8
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           PYTHONUNBUFFERED: "1"
