@@ -1,0 +1,50 @@
+name: Daily 100 Days of Code
+
+on:
+  schedule:
+    # 07:00 UTC = 12:30 PM India time
+    - cron: "0 7 * * *"
+
+  # Gives you a Run workflow button for testing
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  daily-code:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install requests google-genai
+
+      - name: Generate today's C programs
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python automation/daily_code.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "VENKY SHARMA"
+          git config user.email "venkycamb@gmail.com"
+
+          git add Day*/
+
+          if git diff --cached --quiet; then
+            echo "Nothing new to commit."
+            exit 0
+          fi
+
+          git commit -m "Daily 100 Days of Code"
+          git push
