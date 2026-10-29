@@ -12,7 +12,6 @@ ROOT = Path(__file__).resolve().parent.parent
 
 QUESTION_URLS = [
     "https://raw.githubusercontent.com/Soumik-Maity/basic-coding-with-c/main/questions.json",
-    "https://raw.githubusercontent.com/Soumik-Maity/basic-coding-with-c/main/questions2.json",
 ]
 
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
