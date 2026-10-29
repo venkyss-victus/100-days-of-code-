@@ -8,7 +8,7 @@ from google import genai
 
 
 # ============================================================
-# CONFIG
+# CONFIGURATION
 # ============================================================
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -40,15 +40,18 @@ def get_latest_day():
             if match:
                 days.append(int(match.group(1)))
 
-    return max(days) if days else 0
+    if not days:
+        return 0
+
+    return max(days)
 
 
 # ============================================================
-# DOWNLOAD QUESTION BANK
+# DOWNLOAD QUESTIONS
 # ============================================================
 
 def download_questions():
-    print("Downloading question bank...")
+    print("Downloading question bank...", flush=True)
 
     response = requests.get(
         QUESTION_URL,
@@ -62,6 +65,7 @@ def download_questions():
     questions = {}
 
     for section in data.get("questionBank", []):
+
         for question in section.get("questions", []):
 
             question_id = question.get("id")
@@ -71,12 +75,16 @@ def download_questions():
 
             try:
                 question_id = int(question_id)
+
             except (ValueError, TypeError):
                 continue
 
             questions[question_id] = question
 
-    print(f"Found {len(questions)} questions.")
+    print(
+        f"Found {len(questions)} questions.",
+        flush=True
+    )
 
     return questions
 
@@ -96,31 +104,34 @@ def get_question_text(question):
         "problem",
         "description"
     ]:
+
         value = question.get(key)
 
         if isinstance(value, str) and value.strip():
             return value.strip()
 
     raise RuntimeError(
-        "Could not find question text."
+        "Could not find the question text."
     )
 
 
 # ============================================================
-# DETERMINE QUESTIONS FOR EACH DAY
+# WORK OUT WHICH QUESTIONS BELONG TO EACH DAY
 # ============================================================
 
 def get_question_numbers_for_day(day):
 
-    # Day01 -> Questions 1, 2
-    # Day02 -> Questions 3, 4
+    # Day01 = Questions 1 and 2
+    # Day02 = Questions 3 and 4
+    #
     # ...
-    # Day45 -> Questions 89, 90
-    # Day46 -> Questions 91, 92
-    # ...
-    # Day50 -> Questions 99, 100
+    #
+    # Day45 = Questions 89 and 90
+    # Day46 = Questions 91 and 92
+    # Day50 = Questions 99 and 100
 
     if day <= 50:
+
         first_question = ((day - 1) * 2) + 1
 
         return [
@@ -129,56 +140,57 @@ def get_question_numbers_for_day(day):
         ]
 
     # After Day50:
-    # Day51 -> Question 101
-    # Day52 -> Question 102
+    #
+    # Day51 = Question 101
+    # Day52 = Question 102
     # etc.
 
-    return [100 + (day - 50)]
+    question_number = 100 + (day - 50)
+
+    return [question_number]
 
 
 # ============================================================
-# GENERATE C SOLUTION
+# ASK GEMINI TO WRITE C CODE
 # ============================================================
 
-def generate_solution(
-    question_number,
-    question_text
-):
+def generate_solution(question_number, question_text):
 
     print(
-        f"Generating solution for "
-        f"Question {question_number}..."
+        f"Generating solution for Question {question_number}...",
+        flush=True
     )
 
     prompt = f"""
-You are writing a beginner-level C programming solution
-for a first-year BTech CSE student's 100 Days of Code
-GitHub repository.
+You are writing a C programming solution for a first-year
+BTech CSE student's 100 Days of Code repository.
 
-QUESTION NUMBER:
+Question number:
 {question_number}
 
-QUESTION:
+Question:
 {question_text}
 
 Write the complete C program.
 
-STRICT REQUIREMENTS:
+RULES:
 
-1. Return ONLY valid C source code.
-2. Do not use Markdown code fences.
-3. Put the question at the beginning inside a C block comment.
-4. Use simple beginner-friendly C.
+1. Return ONLY C source code.
+2. Do NOT use Markdown code fences.
+3. Put the complete question at the top inside a C block comment.
+4. Write beginner-friendly C code.
 5. Use standard C compatible with GCC C11.
-6. Prefer simple loops, conditions, arrays, strings and functions.
-7. Avoid unnecessarily advanced techniques.
-8. Read required input from stdin.
-9. Print only the output required by the problem.
-10. Use understandable variable names.
-11. main() must return 0.
-12. Do not put explanations outside the C program.
+6. Prefer basic loops, conditions, arrays, strings and simple functions.
+7. Do not use unnecessarily advanced techniques.
+8. Read input from stdin where required.
+9. Print only the result required by the problem.
+10. Do not print prompts such as "Enter a number:" unless the question
+    explicitly requires them.
+11. Use understandable variable names.
+12. main() must return 0.
+13. Do not write explanations outside the C source code.
 
-The beginning should look like:
+Use this general format:
 
 /*
 Question {question_number}:
@@ -202,12 +214,12 @@ int main()
 
     if not response.text:
         raise RuntimeError(
-            "Gemini returned an empty response."
+            f"Gemini returned no code for Question {question_number}."
         )
 
     code = response.text.strip()
 
-    # Remove accidental Markdown code fences.
+    # Remove Markdown fences if Gemini adds them anyway.
 
     code = re.sub(
         r"^```(?:c)?\s*",
@@ -221,18 +233,26 @@ int main()
         code
     )
 
+    print(
+        f"Gemini finished Question {question_number}.",
+        flush=True
+    )
+
     return code.strip() + "\n"
 
 
 # ============================================================
-# COMPILE C PROGRAM
+# COMPILE GENERATED C CODE
 # ============================================================
 
 def compile_program(source_file):
 
     executable = source_file.with_suffix("")
 
-    print(f"Compiling {source_file.name}...")
+    print(
+        f"Compiling {source_file.name}...",
+        flush=True
+    )
 
     result = subprocess.run(
         [
@@ -245,14 +265,21 @@ def compile_program(source_file):
             str(executable)
         ],
         capture_output=True,
-        text=True
+        text=True,
+        timeout=30
     )
 
     if result.returncode != 0:
 
-        print()
-        print("COMPILATION FAILED:")
-        print(result.stderr)
+        print(
+            f"Compilation failed for {source_file.name}.",
+            flush=True
+        )
+
+        print(
+            result.stderr,
+            flush=True
+        )
 
         executable.unlink(
             missing_ok=True
@@ -265,30 +292,37 @@ def compile_program(source_file):
     )
 
     print(
-        f"{source_file.name} compiled successfully."
+        f"{source_file.name} compiled successfully.",
+        flush=True
     )
 
     return True
 
 
 # ============================================================
-# CLEAN UP FAILED DAY
+# REMOVE AN INCOMPLETE DAY
 # ============================================================
 
-def remove_day_folder(folder):
+def cleanup_day_folder(folder):
 
     if not folder.exists():
         return
 
-    for file in folder.iterdir():
-        if file.is_file():
-            file.unlink()
+    print(
+        f"Removing incomplete {folder.name}...",
+        flush=True
+    )
+
+    for item in folder.iterdir():
+
+        if item.is_file():
+            item.unlink()
 
     folder.rmdir()
 
 
 # ============================================================
-# MAIN
+# MAIN AUTOMATION
 # ============================================================
 
 def main():
@@ -297,28 +331,44 @@ def main():
     print("=" * 50)
     print("100 DAYS OF CODE AUTOMATION")
     print("=" * 50)
+    print(flush=True)
+
+    # --------------------------------------------------------
+    # Find next day
+    # --------------------------------------------------------
 
     latest_day = get_latest_day()
+
     next_day = latest_day + 1
 
-    print(f"Latest day: Day{latest_day:02d}")
-    print(f"Next day:   Day{next_day:02d}")
-
-    question_numbers = (
-        get_question_numbers_for_day(next_day)
+    print(
+        f"Latest day: Day{latest_day:02d}",
+        flush=True
     )
 
     print(
-        f"Questions for today: {question_numbers}"
+        f"Next day:   Day{next_day:02d}",
+        flush=True
     )
 
     # --------------------------------------------------------
-    # Download questions
+    # Work out today's questions
+    # --------------------------------------------------------
+
+    question_numbers = get_question_numbers_for_day(
+        next_day
+    )
+
+    print(
+        f"Questions for today: {question_numbers}",
+        flush=True
+    )
+
+    # --------------------------------------------------------
+    # Download website questions
     # --------------------------------------------------------
 
     questions = download_questions()
-
-    # Make sure required questions exist.
 
     for number in question_numbers:
 
@@ -326,23 +376,20 @@ def main():
 
             raise RuntimeError(
                 f"Question {number} was not found "
-                "in the question bank."
+                "in the website question bank."
             )
 
     # --------------------------------------------------------
-    # Create next Day folder
+    # Create next DayXX folder
     # --------------------------------------------------------
 
-    day_folder = (
-        ROOT /
-        f"Day{next_day:02d}"
-    )
+    day_folder = ROOT / f"Day{next_day:02d}"
 
     if day_folder.exists():
 
         raise RuntimeError(
             f"{day_folder.name} already exists. "
-            "Refusing to overwrite existing work."
+            "The automation will not overwrite it."
         )
 
     day_folder.mkdir()
@@ -350,7 +397,7 @@ def main():
     created_files = []
 
     # --------------------------------------------------------
-    # Generate programs
+    # Generate each question
     # --------------------------------------------------------
 
     try:
@@ -359,28 +406,36 @@ def main():
 
             question_data = questions[number]
 
-            question_text = (
-                get_question_text(
-                    question_data
-                )
+            question_text = get_question_text(
+                question_data
             )
 
             print()
             print("-" * 50)
-            print(f"Question {number}")
-            print(question_text)
+            print(
+                f"Question {number}:",
+                flush=True
+            )
+
+            print(
+                question_text,
+                flush=True
+            )
+
             print("-" * 50)
+
+            # Ask Gemini for solution
 
             code = generate_solution(
                 number,
                 question_text
             )
 
-            # Your existing naming format:
+            # Your naming format:
             #
             # Day46/
-            # ├── day46-91.c
-            # └── day46-92.c
+            #   day46-91.c
+            #   day46-92.c
 
             filename = (
                 day_folder /
@@ -395,29 +450,30 @@ def main():
             created_files.append(filename)
 
             print(
-                f"Created {filename.name}"
+                f"Created: {filename.name}",
+                flush=True
             )
 
-            # ------------------------------------------------
-            # Compile test
-            # ------------------------------------------------
+            # Compile before allowing commit
 
             if not compile_program(filename):
 
                 raise RuntimeError(
-                    f"Question {number} "
-                    "failed to compile."
+                    f"Generated code for Question {number} "
+                    "failed compilation."
                 )
 
     except Exception:
 
         print()
         print(
-            f"Generation failed. "
-            f"Removing incomplete Day{next_day:02d}."
+            "Automation failed.",
+            flush=True
         )
 
-        remove_day_folder(day_folder)
+        cleanup_day_folder(
+            day_folder
+        )
 
         raise
 
@@ -429,19 +485,29 @@ def main():
     print("=" * 50)
 
     print(
-        f"Day{next_day:02d} successfully created!"
+        f"Day{next_day:02d} CREATED SUCCESSFULLY",
+        flush=True
     )
 
-    print()
+    print("=" * 50)
 
     for file in created_files:
-        print(f"Created: {file.name}")
+
+        print(
+            f"Created: {file.name}",
+            flush=True
+        )
 
     print()
-    print("All programs compiled successfully.")
+    print(
+        "All C programs compiled successfully.",
+        flush=True
+    )
 
-    print("=" * 50)
-    print()
+    print(
+        "GitHub Actions can now commit and push them.",
+        flush=True
+    )
 
 
 if __name__ == "__main__":

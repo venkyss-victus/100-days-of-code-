@@ -2,10 +2,11 @@ name: Daily 100 Days of Code
 
 on:
   schedule:
-    # 07:00 UTC = 12:30 PM India time
+    # Runs every day at 12:30 PM IST
+    # 07:00 UTC = 12:30 PM IST
     - cron: "0 7 * * *"
 
-  # Gives you a Run workflow button for testing
+  # Allows manual testing from GitHub Actions
   workflow_dispatch:
 
 permissions:
@@ -16,24 +17,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Get your repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Install Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
+      # Install Python packages
       - name: Install dependencies
         run: |
           pip install requests google-genai
 
+      # Generate the next day's C programs
       - name: Generate today's C programs
+        timeout-minutes: 3
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PYTHONUNBUFFERED: "1"
         run: |
-          python Automation/daily_code.py
+          python -u Automation/daily_code.py
 
+      # Commit the new DayXX folder and push it
       - name: Commit and push
         run: |
           git config user.name "VENKY SHARMA"
